@@ -31,6 +31,7 @@ class CNN(nn.Module):
             x = torch.tensor(x, device=self.device, dtype=torch.float)
         if self.mask is not None:
             x *= self.mask
+        x = x.permute(0, 3, 1, 2)
         x = F.relu(self.bn1(self.conv1(x)))
         x = F.relu(self.bn2(self.conv2(x)))
         x = F.relu(self.bn3(self.conv3(x)))
@@ -58,7 +59,6 @@ class MLP(nn.Module):
             s = torch.tensor(s, device=self.device, dtype=torch.float)
         if self.mask is not None:
             s *= self.mask
-        s = s.permute(0, 3, 1, 2)
         batch = s.shape[0]
         s = s.view(batch, -1)
         logits = self.model(s)
