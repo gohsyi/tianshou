@@ -1,23 +1,31 @@
-import datetime
 import gym
 import torch
 import pprint
 import argparse
+import datetime
 import numpy as np
+from copy import deepcopy
+
+import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 
 from tianshou.policy import SACPolicy
-from tianshou.trainer import offpolicy_trainer
+from tianshou.trainer import imitation_trainer
 from tianshou.data import Collector, ReplayBuffer
 from tianshou.env import VectorEnv, SubprocVectorEnv
 
-from .net import ActorProb, Critic
+from .continuous_net import ActorProb, Critic
 
 
 def get_args():
     parser = argparse.ArgumentParser()
+    # Spec.
     parser.add_argument('--note', type=str, default=None)
+    parser.add_argument('--peer', type=float, default=0.)
+    parser.add_argument('--peer-decay-steps', type=int, default=0)
+    parser.add_argument('--load', type=str, default=None)
     parser.add_argument('--reward-threshold', type=float, default=None)
+
     parser.add_argument('--task', type=str, default='Ant-v2')
     parser.add_argument('--seed', type=int, default=1626)
     parser.add_argument('--buffer-size', type=int, default=20000)
@@ -36,7 +44,7 @@ def get_args():
     parser.add_argument('--logdir', type=str, default='log')
     parser.add_argument('--render', type=float, default=0.)
     parser.add_argument('--device', type=str, default='cpu')
-    args = parser.parse_args()
+    args = parser.parse_known_args()[0]
     args.note = args.note or datetime.datetime.now().strftime('%y%m%d%H%M%S')
     return args
 
@@ -76,36 +84,56 @@ def test_sac(args=get_args()):
         args.tau, args.gamma, args.alpha,
         [env.action_space.low[0], env.action_space.high[0]],
         reward_normalization=True, ignore_done=True)
+
+    # Load expert model.
+    assert args.load is not None, 'args.load should not be None'
+    expert = deepcopy(policy)
+    expert.load_state_dict(torch.load(
+        f'{args.logdir}/{args.task}/sac/{args.load}/policy.pth'))
+    expert.eval()
+
     # collector
-    train_collector = Collector(
-        policy, train_envs, ReplayBuffer(args.buffer_size))
+    expert_collector = Collector(
+        expert, train_envs, ReplayBuffer(args.buffer_size))
     test_collector = Collector(policy, test_envs)
     # train_collector.collect(n_step=args.buffer_size)
     # log
-    writer = SummaryWriter(f'{args.logdir}/{args.task}/sac/{args.note}')
+    writer = SummaryWriter(f'{args.logdir}/{args.task}/imitation/{args.note}')
 
     def stop_fn(x):
         return x >= (args.reward_threshold or env.spec.reward_threshold)
 
-    def save_fn(pol):
-        torch.save(pol.state_dict(),
-                   f'{args.logdir}/{args.task}/sac/{args.note}/policy.pth')
+    def learner(pol, batch, batch_size, repeat, peer=0.):
+        losses, peer_terms, ent_losses = [], [], []
+        for _ in range(repeat):
+            for b in batch.split(batch_size):
+                acts = pol(b).act
+                demo = torch.tensor(b.act, dtype=torch.float)
+                loss = F.mse_loss(acts, demo)
+                if peer != 0:
+                    peer_demo = demo[torch.randperm(len(demo))]
+                    peer_term = peer * F.mse_loss(acts, peer_demo)
+                    loss -= peer_term
+                    peer_terms.append(peer_term.detach().cpu.numpy())
+                pol.actor_optim.zero_grad()
+                loss.backward()
+                pol.actor_optim.step()
+                losses.append(loss.detach().cpu().numpy())
+        return {
+            'loss': losses,
+            'loss/ent': ent_losses,
+            'loss/peer': peer_terms if peer else None,
+            'peer': peer,
+        }
 
     # trainer
-    result = offpolicy_trainer(
-        policy=policy,
-        train_collector=train_collector,
-        test_collector=test_collector,
-        max_epoch=args.epoch,
-        step_per_epoch=args.step_per_epoch,
-        collect_per_step=args.collect_per_step,
-        episode_per_test=args.test_num,
-        batch_size=args.batch_size,
-        stop_fn=stop_fn,
-        save_fn=save_fn,
-        writer=writer,
-        task=args.task
-    )
+    result = imitation_trainer(
+        policy, learner, expert_collector, test_collector, args.epoch,
+        args.step_per_epoch, args.collect_per_step, 1,
+        args.test_num, args.batch_size, stop_fn=stop_fn, writer=writer,
+        task=args.task, peer=args.peer, peer_decay_steps=args.peer_decay_steps)
+    assert stop_fn(result['best_reward'])
+    expert_collector.close()
     test_collector.close()
     if __name__ == '__main__':
         pprint.pprint(result)
@@ -115,7 +143,6 @@ def test_sac(args=get_args()):
         result = collector.collect(n_episode=1, render=args.render)
         print(f'Final reward: {result["rew"]}, length: {result["len"]}')
         collector.close()
-
 
 
 if __name__ == '__main__':

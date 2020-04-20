@@ -5,10 +5,10 @@ from tianshou.utils import tqdm_config, MovAvg
 from tianshou.trainer import test_episode, gather_info
 
 
-def onpolicy_trainer(A, B, max_epoch, step_per_epoch, collect_per_step,
-                     repeat_per_collect, episode_per_test, batch_size,
-                     copier=False, peer=0, verbose=True, test_fn=None,
-                     task='', copier_batch_size=0):
+def onpolicy_trainer_with_views(A, B, max_epoch, step_per_epoch, collect_per_step,
+                                repeat_per_collect, episode_per_test, batch_size,
+                                copier=False, peer=0, verbose=True, test_fn=None,
+                                task='', copier_batch_size=0):
     global_step = 0
     best_epoch, best_reward = -1, -1
     stat = {}

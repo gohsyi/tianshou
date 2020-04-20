@@ -16,7 +16,7 @@ if __name__ == '__main__':
     from ..onpolicy import onpolicy_trainer
 else:  # pytest
     from peer.discrete.net import NetWithView, Actor, Critic
-    from peer.onpolicy import onpolicy_trainer
+    from peer.onpolicy_peer import onpolicy_trainer
 
 
 class View(object):

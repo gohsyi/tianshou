@@ -4,8 +4,9 @@ from torch import nn
 import torch.nn.functional as F
 
 
-class NetWithView(nn.Module):
-    def __init__(self, layer_num, state_shape, action_shape=0, device='cpu', mask=None):
+class MLP(nn.Module):
+    def __init__(self, layer_num, state_shape, action_shape=0, device='cpu',
+                 mask=None):
         super().__init__()
         self.device = device
         self.mask = mask
