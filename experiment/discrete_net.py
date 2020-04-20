@@ -4,6 +4,40 @@ from torch import nn
 import torch.nn.functional as F
 
 
+class CNN(nn.Module):
+    def __init__(self, state_shape, device='cpu', mask=None):
+        super(CNN, self).__init__()
+        self.device = device
+        self.mask = mask
+
+        self.conv1 = nn.Conv2d(4, 16, kernel_size=5, stride=2)
+        self.bn1 = nn.BatchNorm2d(16)
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=5, stride=2)
+        self.bn2 = nn.BatchNorm2d(32)
+        self.conv3 = nn.Conv2d(32, 32, kernel_size=5, stride=2)
+        self.bn3 = nn.BatchNorm2d(32)
+
+        def conv2d_size_out(size, kernel_size=5, stride=2):
+            return (size - (kernel_size - 1) - 1) // stride + 1
+
+        h, w, d = state_shape
+        convw = conv2d_size_out(conv2d_size_out(conv2d_size_out(w)))
+        convh = conv2d_size_out(conv2d_size_out(conv2d_size_out(h)))
+        linear_input_size = convw * convh * 32
+        self.fc = nn.Linear(linear_input_size, 128)
+
+    def forward(self, x, state=None, info={}):
+        if not isinstance(x, torch.Tensor):
+            x = torch.tensor(x, device=self.device, dtype=torch.float)
+        if self.mask is not None:
+            x *= self.mask
+        x = F.relu(self.bn1(self.conv1(x)))
+        x = F.relu(self.bn2(self.conv2(x)))
+        x = F.relu(self.bn3(self.conv3(x)))
+        x = self.fc(x.reshape(x.size(0), -1))
+        return x, state
+
+
 class MLP(nn.Module):
     def __init__(self, layer_num, state_shape, action_shape=0, device='cpu',
                  mask=None):
