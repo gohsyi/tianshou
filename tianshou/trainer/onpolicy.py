@@ -9,27 +9,72 @@ def onpolicy_trainer(policy, train_collector, test_collector, max_epoch,
                      step_per_epoch, collect_per_step, repeat_per_collect,
                      episode_per_test, batch_size,
                      train_fn=None, test_fn=None, stop_fn=None, save_fn=None,
-                     writer=None, verbose=True, task=''):
+                     log_fn=None, writer=None, log_interval=1, verbose=True,
+                     task='', **kwargs):
+    """A wrapper for on-policy trainer procedure.
+
+    :param policy: an instance of the :class:`~tianshou.policy.BasePolicy`
+        class.
+    :param train_collector: the collector used for training.
+    :type train_collector: :class:`~tianshou.data.Collector`
+    :param test_collector: the collector used for testing.
+    :type test_collector: :class:`~tianshou.data.Collector`
+    :param int max_epoch: the maximum of epochs for training. The training
+        process might be finished before reaching the ``max_epoch``.
+    :param int step_per_epoch: the number of step for updating policy network
+        in one epoch.
+    :param int collect_per_step: the number of frames the collector would
+        collect before the network update. In other words, collect some frames
+        and do one policy network update.
+    :param int repeat_per_collect: the number of repeat time for policy
+        learning, for example, set it to 2 means the policy needs to learn each
+        given batch data twice.
+    :param episode_per_test: the number of episodes for one policy evaluation.
+    :type episode_per_test: int or list of ints
+    :param int batch_size: the batch size of sample data, which is going to
+        feed in the policy network.
+    :param function train_fn: a function receives the current number of epoch
+        index and performs some operations at the beginning of training in this
+        epoch.
+    :param function test_fn: a function receives the current number of epoch
+        index and performs some operations at the beginning of testing in this
+        epoch.
+    :param function save_fn: a function for saving policy when the undiscounted
+        average mean reward in evaluation phase gets better.
+    :param function stop_fn: a function receives the average undiscounted
+        returns of the testing result, return a boolean which indicates whether
+        reaching the goal.
+    :param function log_fn: a function receives env info for logging.
+    :param torch.utils.tensorboard.SummaryWriter writer: a TensorBoard
+        SummaryWriter.
+    :param int log_interval: the log interval of the writer.
+    :param bool verbose: whether to print the information.
+
+    :return: See :func:`~tianshou.trainer.gather_info`.
+    """
     global_step = 0
     best_epoch, best_reward = -1, -1
     stat = {}
     start_time = time.time()
+    test_in_train = train_collector.policy == policy
     for epoch in range(1, 1 + max_epoch):
         # train
         policy.train()
         if train_fn:
             train_fn(epoch)
-        with tqdm.tqdm(
-                total=step_per_epoch, desc=f'Epoch #{epoch}',
-                **tqdm_config) as t:
+        with tqdm.tqdm(total=step_per_epoch, desc=f'Epoch #{epoch}',
+                       **tqdm_config) as t:
             while t.n < t.total:
-                result = train_collector.collect(n_episode=collect_per_step)
+                result = train_collector.collect(n_episode=collect_per_step,
+                                                 log_fn=log_fn)
                 data = {}
-                if stop_fn and stop_fn(result['rew']):
+                if test_in_train and stop_fn and stop_fn(result['rew']):
                     test_result = test_episode(
                         policy, test_collector, test_fn,
                         epoch, episode_per_test)
                     if stop_fn and stop_fn(test_result['rew']):
+                        if save_fn:
+                            save_fn(policy)
                         for k in result.keys():
                             data[k] = f'{result[k]:.2f}'
                         t.set_postfix(**data)
@@ -50,7 +95,7 @@ def onpolicy_trainer(policy, train_collector, test_collector, max_epoch,
                 global_step += step
                 for k in result.keys():
                     data[k] = f'{result[k]:.2f}'
-                    if writer:
+                    if writer and global_step % log_interval == 0:
                         writer.add_scalar(
                             k + '_' + task if task else k,
                             result[k], global_step=global_step)
@@ -59,7 +104,7 @@ def onpolicy_trainer(policy, train_collector, test_collector, max_epoch,
                         stat[k] = MovAvg()
                     stat[k].add(losses[k])
                     data[k] = f'{stat[k].get():.6f}'
-                    if writer and global_step:
+                    if writer and global_step % log_interval == 0:
                         writer.add_scalar(
                             k + '_' + task if task else k,
                             stat[k].get(), global_step=global_step)

@@ -33,7 +33,7 @@ class Actor(nn.Module):
         return logits, None
 
 
-class Actor(nn.Module):
+class ActorProb(nn.Module):
     def __init__(self, layer_num, state_shape, action_shape,
                  max_action, mask=None, device='cpu'):
         super().__init__()
