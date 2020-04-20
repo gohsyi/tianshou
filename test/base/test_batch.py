@@ -6,7 +6,7 @@ from tianshou.data import Batch
 
 def test_batch():
     batch = Batch(obs=[0], np=np.zeros([3, 4]))
-    batch.update(obs=[1])
+    batch.obs = [1]
     assert batch.obs == [1]
     batch.append(batch)
     assert batch.obs == [1, 1]
@@ -17,6 +17,7 @@ def test_batch():
     batch.obs = np.arange(5)
     for i, b in enumerate(batch.split(1, permute=False)):
         assert b.obs == batch[i].obs
+    print(batch)
 
 
 if __name__ == '__main__':

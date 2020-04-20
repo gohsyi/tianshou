@@ -1,4 +1,8 @@
+<<<<<<< HEAD:test/continuous/test_sac.py
 import datetime
+=======
+import os
+>>>>>>> 4fd826761c9884457928da9dac52d7ee1c51443a:example/halfcheetahBullet_v0_sac.py
 import gym
 import torch
 import pprint
@@ -6,19 +10,33 @@ import argparse
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 
+from tianshou.env import SubprocVectorEnv
 from tianshou.policy import SACPolicy
 from tianshou.trainer import offpolicy_trainer
 from tianshou.data import Collector, ReplayBuffer
-from tianshou.env import VectorEnv, SubprocVectorEnv
 
+<<<<<<< HEAD:test/continuous/test_sac.py
 from .net import ActorProb, Critic
+=======
+try:
+    import pybullet_envs
+except ImportError:
+    pass
+
+from continuous_net import ActorProb, Critic
+>>>>>>> 4fd826761c9884457928da9dac52d7ee1c51443a:example/halfcheetahBullet_v0_sac.py
 
 
 def get_args():
     parser = argparse.ArgumentParser()
+<<<<<<< HEAD:test/continuous/test_sac.py
     parser.add_argument('--note', type=str, default=None)
     parser.add_argument('--reward-threshold', type=float, default=None)
     parser.add_argument('--task', type=str, default='Ant-v2')
+=======
+    parser.add_argument('--task', type=str, default='HalfCheetahBulletEnv-v0')
+    parser.add_argument('--run-id', type=str, default='test')
+>>>>>>> 4fd826761c9884457928da9dac52d7ee1c51443a:example/halfcheetahBullet_v0_sac.py
     parser.add_argument('--seed', type=int, default=1626)
     parser.add_argument('--buffer-size', type=int, default=20000)
     parser.add_argument('--actor-lr', type=float, default=3e-4)
@@ -26,14 +44,15 @@ def get_args():
     parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--tau', type=float, default=0.005)
     parser.add_argument('--alpha', type=float, default=0.2)
-    parser.add_argument('--epoch', type=int, default=100)
-    parser.add_argument('--step-per-epoch', type=int, default=2400)
+    parser.add_argument('--epoch', type=int, default=200)
+    parser.add_argument('--step-per-epoch', type=int, default=1000)
     parser.add_argument('--collect-per-step', type=int, default=10)
     parser.add_argument('--batch-size', type=int, default=128)
     parser.add_argument('--layer-num', type=int, default=1)
     parser.add_argument('--training-num', type=int, default=8)
-    parser.add_argument('--test-num', type=int, default=100)
+    parser.add_argument('--test-num', type=int, default=4)
     parser.add_argument('--logdir', type=str, default='log')
+    parser.add_argument('--log-interval', type=int, default=100)
     parser.add_argument('--render', type=float, default=0.)
     parser.add_argument('--device', type=str, default='cpu')
     args = parser.parse_args()
@@ -42,12 +61,14 @@ def get_args():
 
 
 def test_sac(args=get_args()):
+    torch.set_num_threads(1)
     env = gym.make(args.task)
     args.state_shape = env.observation_space.shape or env.observation_space.n
     args.action_shape = env.action_space.shape or env.action_space.n
     args.max_action = env.action_space.high[0]
+    # you can also use tianshou.env.SubprocVectorEnv
     # train_envs = gym.make(args.task)
-    train_envs = VectorEnv(
+    train_envs = SubprocVectorEnv(
         [lambda: gym.make(args.task) for _ in range(args.training_num)])
     # test_envs = gym.make(args.task)
     test_envs = SubprocVectorEnv(
@@ -82,7 +103,12 @@ def test_sac(args=get_args()):
     test_collector = Collector(policy, test_envs)
     # train_collector.collect(n_step=args.buffer_size)
     # log
+<<<<<<< HEAD:test/continuous/test_sac.py
     writer = SummaryWriter(f'{args.logdir}/{args.task}/sac/{args.note}')
+=======
+    log_path = os.path.join(args.logdir, args.task, 'sac', args.run_id)
+    writer = SummaryWriter(log_path)
+>>>>>>> 4fd826761c9884457928da9dac52d7ee1c51443a:example/halfcheetahBullet_v0_sac.py
 
     def stop_fn(x):
         return x >= (args.reward_threshold or env.spec.reward_threshold)
@@ -93,6 +119,7 @@ def test_sac(args=get_args()):
 
     # trainer
     result = offpolicy_trainer(
+<<<<<<< HEAD:test/continuous/test_sac.py
         policy=policy,
         train_collector=train_collector,
         test_collector=test_collector,
@@ -106,6 +133,14 @@ def test_sac(args=get_args()):
         writer=writer,
         task=args.task
     )
+=======
+        policy, train_collector, test_collector, args.epoch,
+        args.step_per_epoch, args.collect_per_step, args.test_num,
+        args.batch_size, stop_fn=stop_fn,
+        writer=writer, log_interval=args.log_interval)
+    assert stop_fn(result['best_reward'])
+    train_collector.close()
+>>>>>>> 4fd826761c9884457928da9dac52d7ee1c51443a:example/halfcheetahBullet_v0_sac.py
     test_collector.close()
     if __name__ == '__main__':
         pprint.pprint(result)
@@ -119,4 +154,5 @@ def test_sac(args=get_args()):
 
 
 if __name__ == '__main__':
+    __all__ = ('pybullet_envs',)  # Avoid F401 error :)
     test_sac()
