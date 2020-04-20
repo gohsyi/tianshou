@@ -58,6 +58,7 @@ class MLP(nn.Module):
             s = torch.tensor(s, device=self.device, dtype=torch.float)
         if self.mask is not None:
             s *= self.mask
+        s = s.permute(0, 3, 1, 2)
         batch = s.shape[0]
         s = s.view(batch, -1)
         logits = self.model(s)
@@ -114,6 +115,7 @@ class DQN(nn.Module):
     def forward(self, x, state=None, info={}):
         if not isinstance(x, torch.Tensor):
             x = torch.tensor(x, device=self.device, dtype=torch.float)
+        x = x.permute(0, 3, 1, 2)
         if self.mask is not None:
             x *= self.mask
         x = F.relu(self.bn1(self.conv1(x)))
