@@ -29,9 +29,9 @@ class CNN(nn.Module):
     def forward(self, x, state=None, info={}):
         if not isinstance(x, torch.Tensor):
             x = torch.tensor(x, device=self.device, dtype=torch.float)
+        x = x.permute(0, 3, 1, 2)
         if self.mask is not None:
             x *= self.mask
-        x = x.permute(0, 3, 1, 2)
         x = F.relu(self.bn1(self.conv1(x)))
         x = F.relu(self.bn2(self.conv2(x)))
         x = F.relu(self.bn3(self.conv3(x)))

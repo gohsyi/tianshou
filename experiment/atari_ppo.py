@@ -12,7 +12,7 @@ from tianshou.trainer import onpolicy_trainer
 from tianshou.data import Collector, ReplayBuffer
 from tianshou.env.atari import create_atari_environment
 
-from .discrete_net import CNN, Actor, Critic
+from experiment.discrete_net import CNN, Actor, Critic
 
 
 def get_args():
